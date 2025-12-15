@@ -1,28 +1,13 @@
-Aquí tienes el código completo (app.py) listo para copiar y pegar.
-
-He integrado tu lógica original de visualización pero he aplicado la modificación en la función dibujarCarga. Ahora, cuando el sistema detecte una configuración de 2 metros, dibujará visualmente dos pallets separados (izquierda y derecha) con bordes negros para diferenciarlos, manteniendo tus cálculos de peso y centro de gravedad intactos.
-
-Instrucciones:
-Abre tu archivo app.py en VS Code o GitHub.
-
-Borra todo lo que hay dentro.
-
-Copia y pega este código completo.
-
-Guarda los cambios (Commit).
-
-Python
-
 import streamlit as st
 import streamlit.components.v1 as components
 
-# Configuración de la página
+# --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(layout="wide", page_title="Visor Carga Walmart")
 
 st.title("🚛 Visor de Carga 3D - Walmart")
 st.markdown("Visualización de distribución de pallets (Visualización Dividida: Izquierda/Derecha).")
 
-# Contenedor del código HTML/JS
+# --- CÓDIGO HTML/JS INTEGRADO ---
 html_code = """
 <!DOCTYPE html>
 <html>
@@ -94,15 +79,13 @@ html_code = """
             'camion_medio': { L: 8.0, W: 2.4, H: 2.5, min_cajas: 800 }
         };
 
-        // --- CLASE SIMULADA DEL OPTIMIZADOR (Para que funcione el código) ---
+        // --- CLASE SIMULADA DEL OPTIMIZADOR ---
         class OptimizadorCarga {
             constructor(tipoCamion) {
                 this.camion = FLOTA[tipoCamion];
             }
 
             ejecutar() {
-                // Generamos una carga ficticia para demostrar la visualización
-                // Esto simula tu algoritmo real devolviendo una lista de posiciones
                 const carga = [];
                 let pesoTotal = 0;
                 let cajasTotal = 0;
@@ -127,7 +110,6 @@ html_code = """
                     numPallets += 2;
                 }
 
-                // Cálculo básico de métricas
                 const metricas = {
                     peso: pesoTotal,
                     cajas: cajasTotal,
@@ -206,7 +188,7 @@ html_code = """
             truckGroup.add(edges);
         }
 
-        // --- DIBUJAR CARGA (AQUÍ ESTÁ TU MODIFICACIÓN) ---
+        // --- DIBUJAR CARGA (MODIFICADO: 2 PALLETS) ---
         function dibujarCarga(listaCarga, metricas, camion) {
             // Limpiar anterior
             while(cargoGroup.children.length > 0) cargoGroup.remove(cargoGroup.children[0]);
@@ -219,7 +201,7 @@ html_code = """
             const matBorde = new THREE.LineBasicMaterial({ color: 0x000000 });   // Borde Negro
 
             listaCarga.forEach(p => {
-                // Lógica modificada: Si el ancho es >= 2.0, dibujamos 2 pallets separados
+                // Lógica modificada: Si el ancho es >= 1.9 (es decir, aprox 2m), dibujamos 2 pallets
                 
                 if (p.dimX >= 1.9) { 
                     // === PALLET IZQUIERDO ===
@@ -261,8 +243,8 @@ html_code = """
                     palletMeshes.push(mesh);
                 }
 
-                // Cálculo físico (Mantenemos tu lógica original de momentos)
-                momentoX += (p.x + p.dimX/2) * p.peso; // Nota: Revisar si tu fórmula de momento requería p.dimX/2
+                // Cálculo físico
+                momentoX += (p.x + p.dimX/2) * p.peso; 
                 momentoY += (p.y + p.dimY/2) * p.peso;
             });
 
@@ -296,14 +278,14 @@ html_code = """
             document.getElementById('lbl-peso').innerText = metricas.peso.toLocaleString('es-CL') + ' kg';
             
             // Volumen
-            const volCarga = metricas.palletsCount * 1.2 * 1.0 * 1.4; // Aprox por pallet
+            const volCarga = metricas.palletsCount * 1.2 * 1.0 * 1.4; 
             const volCamion = camion.L * camion.W * camion.H;
             document.getElementById('lbl-vol').innerText = ((volCarga/volCamion)*100).toFixed(1) + '%';
             
             document.getElementById('lbl-cog-x').innerText = cogX.toFixed(2) + ' m';
             document.getElementById('lbl-cog-y').innerText = cogY.toFixed(2) + ' m';
 
-            // Estabilidad (CoG debe estar cerca del centro W/2)
+            // Estabilidad
             const diffY = Math.abs(cogY - (camion.W / 2));
             const lblEst = document.getElementById('lbl-estabilidad');
             
@@ -353,4 +335,5 @@ html_code = """
 </html>
 """
 
+# Renderizar el HTML en Streamlit
 components.html(html_code, height=850, scrolling=True)
