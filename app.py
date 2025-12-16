@@ -300,6 +300,7 @@ html_code = """
         <div style="margin-top: 15px; font-size: 10px; color: #888; border-top:1px solid #444; padding-top:10px;">
             <strong>Reglas Activas:</strong><br>
             • Llenado: Cabina ➡ Puerta<br>
+            • Distribución: Pesado (80%) ➡ Liviano (20%)<br>
             • Prioridad: Llenar Piso Rampla<br>
             • Apilar: Solo si falta Meta Cajas<br>
         </div>
@@ -484,8 +485,13 @@ html_code = """
             }
 
             ordenarPrioridad(pallets) {
+                // Estrategia: Peso descendente para cargar lo más pesado adelante (80%) y liviano atrás (20%)
                 return pallets.sort((a, b) => {
+                     // Prioridad 1: Peso (Mayor a menor)
+                    if (b.peso - a.peso !== 0) return b.peso - a.peso;
+                    // Prioridad 2: Fecha (FIFO) - Solo en caso de empate de peso
                     if (a.fecha - b.fecha !== 0) return a.fecha - b.fecha; 
+                    // Prioridad 3: PDQ
                     return (a.pdq === b.pdq) ? 0 : a.pdq ? -1 : 1; 
                 });
             }
