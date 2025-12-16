@@ -1,12 +1,3 @@
-import streamlit as st
-import streamlit.components.v1 as components
-
-# 1. Configuración de la página para aprovechar todo el ancho
-st.set_page_config(page_title="Optimización de Carga", layout="wide")
-
-# 2. Aquí definimos todo tu código HTML/JS/CSS dentro de una variable de texto (string)
-#    Nota: He unido la Parte 1 y la Parte 2 perfectamente.
-html_code = """
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -69,6 +60,9 @@ html_code = """
         
         button.excel-btn { background: #1D6F42; margin-top: 10px; }
         button.excel-btn:hover { background: #145231; }
+
+        button.pdf-btn { background: #D32F2F; margin-top: 5px; }
+        button.pdf-btn:hover { background: #B71C1C; }
 
         /* Leyenda */
         .legend-item { display: flex; align-items: center; margin-top: 4px; font-size: 11px; }
@@ -169,16 +163,24 @@ html_code = """
             border: 1px solid #ffc220;
         }
     </style>
+    <!-- Librerías 3D -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- Librería Excel (SheetJS) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Librerías PDF (jsPDF) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body>
 
+    <!-- Tooltip (Etiqueta Flotante) -->
     <div id="tooltip"></div>
 
+    <!-- Etiquetas de Orientación (inyectadas por JS) -->
     <div id="labels-container"></div>
 
+    <!-- Modal Manifiesto -->
     <div id="modal-overlay">
         <div id="modal-content">
             <div class="modal-header">
@@ -200,12 +202,14 @@ html_code = """
                         </tr>
                     </thead>
                     <tbody>
-                        </tbody>
+                        <!-- JS llenará esto -->
+                    </tbody>
                 </table>
             </div>
         </div>
     </div>
 
+    <!-- Panel de Datos -->
     <div id="info-panel">
         <h1>Optimización de Carga</h1>
         
@@ -241,6 +245,7 @@ html_code = """
         <div class="legend-item" style="color:#00ff00; font-weight:bold;">⮕ Flujo de Carga (Cabina -> Puerta)</div>
     </div>
 
+    <!-- Panel de Configuración -->
     <div id="controls-panel">
         <h1>Configuración</h1>
         
@@ -258,14 +263,18 @@ html_code = """
 
         <label>CONFERENTE ASIGNADO</label>
         <select id="sel-conferente">
-            </select>
+            <!-- Se llena con JS -->
+        </select>
 
         <label>ANDÉN DE CARGA</label>
         <select id="sel-anden">
-            </select>
+            <!-- Se llena con JS -->
+        </select>
 
         <button onclick="ejecutarSimulacion()">RECALCULAR ESTIBA</button>
         <button class="secondary" onclick="mostrarTabla()">VER TABLA DE CARGA</button>
+        <button class="excel-btn" onclick="descargarExcel()">DESCARGAR MANIFIESTO (EXCEL)</button>
+        <button class="pdf-btn" onclick="descargarPDF()">DESCARGAR LAYOUT (PDF)</button>
         
         <div style="margin-top: 15px; font-size: 10px; color: #888; border-top:1px solid #444; padding-top:10px;">
             <strong>Reglas Activas:</strong><br>
@@ -314,7 +323,7 @@ html_code = """
 
         function generarDatosDummy() {
             let pallets = [];
-            const lineas = CSV_DATA_RAW.split('\\n');
+            const lineas = CSV_DATA_RAW.split('\n');
             lineas.forEach(l => {
                 const d = l.split(',');
                 pallets.push({
@@ -342,6 +351,7 @@ html_code = """
         }
 
         let STOCK_SHIPPING = generarDatosDummy();
+        let ULTIMO_PLAN_CARGA = [];
 
         // ==============================================================================
         // 2. LÓGICA DE EXCEL REFORZADA
@@ -391,7 +401,7 @@ html_code = """
                     let clean = val.replace(/[^0-9.,-]/g, ''); 
                     // Si tiene coma y punto, asumimos formato miles/decimales estandar
                     if (clean.includes(',') && clean.includes('.')) {
-                        clean = clean.replace(/\\./g, '').replace(',', '.');
+                        clean = clean.replace(/\./g, '').replace(',', '.');
                     } else {
                         // Solo coma -> reemplazar por punto
                         clean = clean.replace(',', '.');
@@ -496,6 +506,7 @@ html_code = """
                     p.dimX = this.pLargoOcupado;
                     p.dimY = this.pAnchoOcupado;
                     
+                    // CORRECCIÓN LADO: INVERTIDO PARA COINCIDIR CON "CABINA ARRIBA"
                     p.lado = columna === 0 ? 'Derecha' : 'Izquierda';
                     
                     planCarga.push({...p});
@@ -848,9 +859,196 @@ html_code = """
             const camion = FLOTA[camionId];
             const optimizador = new OptimizadorCarga(camionId);
             const resultado = optimizador.ejecutar();
+            ULTIMO_PLAN_CARGA = resultado.carga;
             dibujarCamion(camion);
             dibujarCarga(resultado.carga, resultado.metricas, camion);
             generarTablaManifiesto(resultado.carga);
+        }
+
+        function descargarExcel() {
+            if (!ULTIMO_PLAN_CARGA || ULTIMO_PLAN_CARGA.length === 0) {
+                mostrarToast("No hay datos para exportar", "#f44336");
+                return;
+            }
+
+            // Ordenar datos igual que la tabla visual (Fondo -> Lado -> Altura)
+            const dataExport = [...ULTIMO_PLAN_CARGA].sort((a, b) => {
+                if (Math.abs(a.x - b.x) > 0.1) return a.x - b.x;
+                if (Math.abs(a.y - b.y) > 0.1) return a.y - b.y;
+                return a.z - b.z;
+            }).map((p, i) => ({
+                "Secuencia": i + 1,
+                "Lado": p.lado,
+                "ID Pallet": p.id,
+                "Tipo": p.tipo,
+                "Peso (kg)": p.peso,
+                "Cajas": p.cajas,
+                "Distancia Cabina (m)": p.x.toFixed(2),
+                "Ubicación": p.apiladoSobre ? `Apilado sobre ${p.apiladoSobre}` : "Piso",
+                "Fecha": p.fecha ? new Date(p.fecha).toLocaleDateString() : "-"
+            }));
+
+            const ws = XLSX.utils.json_to_sheet(dataExport);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Manifiesto Carga");
+            
+            // Generar nombre de archivo con fecha
+            const fechaStr = new Date().toISOString().slice(0,10);
+            XLSX.writeFile(wb, `Manifiesto_Carga_Walmart_${fechaStr}.xlsx`);
+            mostrarToast("Excel descargado correctamente", "#4caf50");
+        }
+
+        async function descargarPDF() {
+            if (!ULTIMO_PLAN_CARGA || ULTIMO_PLAN_CARGA.length === 0) {
+                mostrarToast("No hay datos para generar PDF", "#f44336");
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+            
+            // Configuración
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
+            const margin = 10;
+            
+            const camionId = document.getElementById('sel-camion').value;
+            const camionInfo = FLOTA[camionId];
+            
+            // Título
+            doc.setFontSize(16);
+            doc.setTextColor(0, 125, 198); // Azul Walmart
+            doc.text("Reporte de Estiba - Layout de Carga", margin, margin + 5);
+            
+            doc.setFontSize(10);
+            doc.setTextColor(50, 50, 50);
+            doc.text(`Camión: ${camionInfo.desc} | Fecha: ${new Date().toLocaleDateString()}`, margin, margin + 12);
+
+            // ==========================================
+            // DIBUJO DEL CAMIÓN (TOP VIEW)
+            // ==========================================
+            
+            // Espacio disponible para el dibujo
+            const drawAreaWidth = pageWidth - (margin * 2);
+            const drawAreaHeight = 70; // Altura fija para el gráfico
+            const startY = margin + 20;
+
+            // Escala: Ajustar el largo del camión al ancho disponible
+            // Usamos un factor de seguridad (0.9) para que no toque los bordes
+            const scale = (drawAreaWidth / camionInfo.L) * 0.95;
+            
+            // Coordenadas base del dibujo (centrado horizontalmente)
+            const truckDrawWidth = camionInfo.L * scale;
+            const truckDrawHeight = camionInfo.W * scale;
+            const startX = margin + (drawAreaWidth - truckDrawWidth) / 2;
+            const truckY = startY + (drawAreaHeight - truckDrawHeight) / 2;
+
+            // 1. Dibujar Contorno Camión
+            doc.setDrawColor(50, 50, 50);
+            doc.setLineWidth(0.5);
+            doc.rect(startX, truckY, truckDrawWidth, truckDrawHeight); // Chasis
+            
+            // Cabina (Indicador visual a la izquierda)
+            doc.setFillColor(200, 200, 200);
+            doc.rect(startX - 5, truckY, 5, truckDrawHeight, 'F');
+            doc.setFontSize(8);
+            doc.setTextColor(0, 0, 0);
+            doc.text("CAB", startX - 4, truckY + truckDrawHeight/2 + 1, { angle: 90, align: 'center' });
+
+            // 2. Dibujar Pallets
+            // Filtramos solo los que están en el piso (z=0) para el layout 2D, 
+            // pero indicamos si hay apilados.
+            const palletsPiso = ULTIMO_PLAN_CARGA.filter(p => p.z < 0.1);
+
+            palletsPiso.forEach((p, i) => {
+                // Coordenadas PDF
+                // X en 3D = Largo Camión = X en PDF
+                // Y en 3D = Ancho Camión = Y en PDF
+                const pdfX = startX + (p.x * scale);
+                // Invertimos Y visualmente si es necesario, pero como el origen 3D suele ser (0,0) en esquina, 
+                // y PDF es top-left, solo sumamos.
+                const pdfY = truckY + (p.y * scale);
+                
+                const w = p.dimX * scale;
+                const h = p.dimY * scale;
+
+                // Color según tipo
+                if (p.tipo === 'Alimento') {
+                    doc.setFillColor(255, 143, 0); // Naranja
+                } else {
+                    doc.setFillColor(123, 31, 162); // Violeta
+                }
+                
+                doc.setDrawColor(255, 255, 255);
+                doc.rect(pdfX, pdfY, w, h, 'FD'); // Fill and Draw border
+
+                // Verificar si tiene carga encima
+                const tieneApilado = ULTIMO_PLAN_CARGA.some(top => top.apiladoSobre === p.id);
+                
+                // Texto ID
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(7);
+                // Si es muy pequeño, solo poner numero de secuencia
+                // Buscamos el índice original en el plan completo para el número
+                const indexReal = ULTIMO_PLAN_CARGA.findIndex(x => x.id === p.id) + 1;
+                doc.text(`${indexReal}`, pdfX + w/2, pdfY + h/2 + 1, { align: 'center' });
+
+                // Indicador de Apilado
+                if (tieneApilado) {
+                    doc.setTextColor(0, 0, 0);
+                    doc.setFontSize(6);
+                    doc.text("x2", pdfX + w - 2, pdfY + 3);
+                }
+            });
+
+            // Leyenda Gráfico
+            const legendY = startY + drawAreaHeight + 5;
+            doc.setFontSize(8);
+            doc.setTextColor(0,0,0);
+            
+            // Naranja
+            doc.setFillColor(255, 143, 0);
+            doc.rect(margin, legendY, 4, 4, 'F');
+            doc.text("Alimento", margin + 5, legendY + 3);
+            
+            // Violeta
+            doc.setFillColor(123, 31, 162);
+            doc.rect(margin + 25, legendY, 4, 4, 'F');
+            doc.text("Contaminante", margin + 30, legendY + 3);
+
+            doc.text("* Números indican secuencia de carga. 'x2' indica pallet apilado.", margin + 60, legendY + 3);
+
+            // ==========================================
+            // TABLA DE DATOS
+            // ==========================================
+            
+            // Preparar datos para autotable
+            const tableData = ULTIMO_PLAN_CARGA.sort((a, b) => {
+                 if (Math.abs(a.x - b.x) > 0.1) return a.x - b.x;
+                 return a.z - b.z;
+            }).map((p, i) => [
+                i + 1,
+                p.id,
+                p.tipo,
+                `${p.peso} kg`,
+                p.cajas,
+                p.lado,
+                p.apiladoSobre ? 'Apilado' : 'Piso'
+            ]);
+
+            doc.autoTable({
+                startY: legendY + 10,
+                head: [['Sec', 'ID Pallet', 'Tipo', 'Peso', 'Cajas', 'Lado', 'Posición']],
+                body: tableData,
+                theme: 'grid',
+                styles: { fontSize: 8, cellPadding: 2 },
+                headStyles: { fillColor: [0, 125, 198] }
+            });
+
+            // Guardar
+            const fechaStr = new Date().toISOString().slice(0,10);
+            doc.save(`Layout_Carga_Walmart_${fechaStr}.pdf`);
+            mostrarToast("PDF generado correctamente", "#4caf50");
         }
 
         window.onload = function() {
@@ -861,13 +1059,4 @@ html_code = """
 
     </script>
 </body>
-</html>
-"""
-
-# 3. Renderizar el HTML en Streamlit
-st.title("Visor de Optimización de Carga - Walmart")
-st.markdown("Carga tu manifiesto (Excel) o usa los datos de prueba.")
-
-# Usamos components.html para renderizar todo el bloque anterior
-# height=900 para dar espacio a la visualización 3D
-components.html(html_code, height=900, scrolling=True)
+</html>True)
