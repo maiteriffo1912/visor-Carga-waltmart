@@ -1,3 +1,24 @@
+import streamlit as st
+import streamlit.components.v1 as components
+
+# Configuración de la página de Streamlit
+st.set_page_config(
+    page_title="Gemelo Digital - Optimización de Estiba Walmart",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+
+# Ocultar elementos propios de Streamlit para dar más espacio al visor
+st.markdown("""
+    <style>
+        .block-container { padding: 0 !important; }
+        header { visibility: hidden; }
+        footer { visibility: hidden; }
+    </style>
+""", unsafe_allow_html=True)
+
+# Código HTML/JS/CSS completo del Gemelo Digital
+html_code = """
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -323,7 +344,7 @@
 
         function generarDatosDummy() {
             let pallets = [];
-            const lineas = CSV_DATA_RAW.split('\n');
+            const lineas = CSV_DATA_RAW.split('\\n');
             lineas.forEach(l => {
                 const d = l.split(',');
                 pallets.push({
@@ -1059,4 +1080,8 @@
 
     </script>
 </body>
-</html>True)
+</html>
+"""
+
+# Renderizar el HTML
+components.html(html_code, height=900, scrolling=True)
