@@ -246,7 +246,7 @@ html_code = """
             <h2>Métricas de Carga</h2>
             <div class="kpi-row"><span>Pallets Cargados:</span> <span id="lbl-pallets" class="kpi-val">0</span></div>
             <div class="kpi-row"><span>Peso Total:</span> <span id="lbl-peso" class="kpi-val">0 kg</span></div>
-            <div class="kpi-row"><span>Ocupación Vol:</span> <span id="lbl-vol" class="kpi-val">0%</span></div>
+            <div class="kpi-row"><span>Ocupación Área:</span> <span id="lbl-area" class="kpi-val">0%</span></div>
             <div class="kpi-row"><span>Cajas Totales:</span> <span id="lbl-cajas-actuales" class="kpi-val">0</span></div>
             <div class="kpi-row"><span>Meta Cajas:</span> <span id="lbl-meta-cajas" class="kpi-val">-</span></div>
             <div class="kpi-row"><span>Estado Meta:</span> <span id="lbl-estado-cajas" class="kpi-val">-</span></div>
@@ -825,9 +825,13 @@ html_code = """
                 momentoY += (p.y + p.dimY/2) * p.peso;
             });
 
-            if (metricas.peso > 0) {
+           if (metricas.peso > 0) {
                 const cogX = momentoX / metricas.peso;
                 const cogY = momentoY / metricas.peso;
+                
+                // NUEVO: Contar solo pallets en piso (z casi igual a 0 por seguridad de flotantes)
+                metricas.palletsPisoCount = carga.filter(p => p.z < 0.1).length; 
+                
                 actualizarUI(metricas, cogX, cogY, camion);
                 
                 // Visualización de CoG (Punto Verde)
@@ -852,9 +856,13 @@ html_code = """
             document.getElementById('lbl-pallets').innerText = metricas.palletsCount;
             document.getElementById('lbl-peso').innerText = metricas.peso.toLocaleString('es-CL') + ' kg';
             
-            const volCarga = metricas.palletsCount * 1.2 * 1.0 * 1.4; 
-            const volCamion = camion.L * camion.W * camion.H;
-            document.getElementById('lbl-vol').innerText = ((volCarga/volCamion)*100).toFixed(1) + '%';
+           // Cálculo de Área (Footprint)
+            const areaCamion = camion.L * camion.W;
+            // Utilizamos las dimensiones fijas que asignaste en OptimizadorCarga (1.2 x 1.0)
+            const areaPallet = 1.2 * 1.0; 
+            const areaTotalOcupada = (metricas.palletsPisoCount || 0) * areaPallet;
+            
+            document.getElementById('lbl-area').innerText = ((areaTotalOcupada / areaCamion) * 100).toFixed(1) + '%';
             document.getElementById('lbl-cog-x').innerText = cogX.toFixed(2) + ' m';
             document.getElementById('lbl-cog-y').innerText = cogY.toFixed(2) + ' m';
 
